@@ -31,10 +31,17 @@
 
 		<style>
 			/* ---------- Colors and fonts: change the look here ---------- */
+			@property --gap {
+				syntax: "<length>";
+				inherits: true;
+				initial-value: 14px;
+			}
 			:root {
 				--page: #000000; /* background behind the window */
-				--dot: rgba(255, 255, 255, 0.42); /* the small dots */
-				--panel: #08080a; /* the window */
+				--dot-rgb: 255, 255, 255; /* color of the background dots */
+				--panel: rgba(8, 8, 10, 0.55); /* the window (see-through, so the dots show) */
+				--panel-solid: #08080a; /* the top bar and tab strip */
+				--tab-active: #1a1a1f; /* the selected tab */
 				--line: #2b2b30; /* borders */
 				--text: #ececec;
 				--dim: #8d8d96;
@@ -46,12 +53,15 @@
 
 				--gap: clamp(14px, 3.2vw, 44px); /* space around the window */
 				--bar: 58px; /* height of the top bar */
+				--tabs: 40px; /* height of the tab strip */
 				--radius: 6px;
 			}
 			:root[data-theme="light"] {
 				--page: #efefea;
-				--dot: rgba(0, 0, 0, 0.3);
-				--panel: #ffffff;
+				--dot-rgb: 0, 0, 0;
+				--panel: rgba(255, 255, 255, 0.7);
+				--panel-solid: #ffffff;
+				--tab-active: #e9e9e4;
 				--line: #c9c9c4;
 				--text: #141414;
 				--dim: #63636b;
@@ -62,6 +72,10 @@
 			:root.theater {
 				--gap: 0px;
 				--radius: 0px;
+			}
+			/* Only while switching theater mode, so the window glides open */
+			:root.gap-anim {
+				transition: --gap 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
 			}
 
 			* {
@@ -77,8 +91,25 @@
 				color: var(--text);
 				font: 15px/1.5 var(--retro);
 				background-color: var(--page);
-				background-image: radial-gradient(var(--dot) 1px, transparent 1.6px);
+				/* Plain dots, used only if the animated background cannot run */
+				background-image: radial-gradient(
+					rgba(var(--dot-rgb), 0.42) 1px,
+					transparent 1.6px
+				);
 				background-size: 26px 26px;
+				transition: background-color 0.25s;
+			}
+			body.live-bg {
+				background-image: none;
+			}
+
+			/* ---------- Animated dot background ---------- */
+			#bg {
+				position: fixed;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				display: block;
 			}
 
 			/* ---------- The window ---------- */
@@ -91,6 +122,16 @@
 				border: 1px solid var(--line);
 				border-radius: var(--radius);
 				overflow: hidden;
+				animation: window-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+				transition:
+					background-color 0.25s,
+					border-color 0.25s;
+			}
+			@keyframes window-in {
+				from {
+					opacity: 0;
+					transform: translateY(12px) scale(0.985);
+				}
 			}
 
 			/* ---------- Top bar ---------- */
@@ -101,7 +142,8 @@
 				align-items: center;
 				gap: 14px;
 				padding: 0 14px;
-				border-bottom: 1px solid var(--line);
+				background: var(--panel-solid);
+				transition: background-color 0.25s;
 			}
 			.brand {
 				display: flex;
@@ -116,6 +158,10 @@
 				width: 28px;
 				height: 28px;
 				flex: none;
+				transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+			}
+			.brand:hover svg {
+				transform: rotate(180deg);
 			}
 			#sj-form {
 				flex: 1;
@@ -133,6 +179,14 @@
 				border: 1px solid var(--line);
 				border-radius: 4px;
 				font: inherit;
+				transition:
+					border-color 0.2s,
+					box-shadow 0.2s;
+			}
+			#sj-address:focus {
+				outline: none;
+				border-color: var(--text);
+				box-shadow: 0 0 14px -2px var(--glow);
 			}
 			#sj-address::placeholder {
 				color: var(--dim);
@@ -151,21 +205,189 @@
 				font: inherit;
 				cursor: pointer;
 				white-space: nowrap;
+				transition:
+					border-color 0.15s,
+					transform 0.1s;
 			}
 			button:hover {
 				border-color: var(--text);
+			}
+			button:active {
+				transform: scale(0.96);
 			}
 			button[hidden] {
 				display: none;
 			}
 			button[aria-pressed="true"] {
-				color: var(--panel);
+				color: var(--panel-solid);
 				background: var(--text);
 				border-color: var(--text);
 			}
 			:focus-visible {
 				outline: 2px solid var(--text);
 				outline-offset: 2px;
+			}
+
+			/* ---------- Tabs ---------- */
+			.tabs {
+				flex: none;
+				height: var(--tabs);
+				display: flex;
+				align-items: flex-end;
+				gap: 4px;
+				padding: 0 10px;
+				background: var(--panel-solid);
+				border-bottom: 1px solid var(--line);
+				overflow-x: auto;
+				overflow-y: hidden;
+				scrollbar-width: none;
+				transition:
+					background-color 0.25s,
+					border-color 0.25s;
+			}
+			.tabs::-webkit-scrollbar {
+				display: none;
+			}
+			.tab {
+				flex: 0 1 200px;
+				min-width: 92px;
+				max-width: 200px;
+				height: 32px;
+				display: flex;
+				align-items: center;
+				color: var(--dim);
+				border: 1px solid var(--line);
+				border-bottom: 0;
+				border-radius: 5px 5px 0 0;
+				animation: tab-in 0.22s ease both;
+			}
+			.tab.active {
+				color: var(--text);
+				background: var(--tab-active);
+				box-shadow: inset 0 2px 0 var(--text); /* bright line on top of the open tab */
+			}
+			.tab.closing {
+				pointer-events: none;
+				animation: tab-out 0.16s ease forwards;
+			}
+			@keyframes tab-in {
+				from {
+					min-width: 0;
+					max-width: 0;
+					opacity: 0;
+				}
+			}
+			@keyframes tab-out {
+				to {
+					min-width: 0;
+					max-width: 0;
+					margin-left: -4px;
+					border-width: 0;
+					opacity: 0;
+				}
+			}
+			.tab-pick {
+				flex: 1;
+				min-width: 0;
+				height: 100%;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 0 2px 0 10px;
+				color: inherit;
+				border: 0;
+				border-radius: 0;
+				text-align: left;
+				font: 13px/1 var(--modern); /* site names stay modern, like Sable's video titles */
+				overflow: hidden;
+			}
+			.tab-pick:active {
+				transform: none;
+			}
+			.tab-label {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			/* Small pulsing dot while that tab is loading */
+			.tab-dot {
+				display: none;
+				flex: none;
+				width: 7px;
+				height: 7px;
+				border-radius: 50%;
+				background: currentColor;
+				animation: pulse 0.9s ease-in-out infinite;
+			}
+			.tab.loading .tab-dot {
+				display: block;
+			}
+			@keyframes pulse {
+				50% {
+					opacity: 0.2;
+					transform: scale(0.6);
+				}
+			}
+			.tab-close {
+				flex: none;
+				width: 22px;
+				height: 22px;
+				margin-right: 5px;
+				padding: 0;
+				color: inherit;
+				border: 0;
+				border-radius: 4px;
+				font: 16px/1 var(--modern);
+				opacity: 0.6;
+			}
+			.tab-close:hover {
+				opacity: 1;
+				background: var(--line);
+			}
+			.new-tab {
+				flex: none;
+				width: 32px;
+				height: 32px;
+				padding: 0;
+				color: var(--dim);
+				border-color: transparent;
+				font: 20px/1 var(--modern);
+			}
+			.new-tab:hover {
+				color: var(--text);
+			}
+			.new-tab:disabled {
+				opacity: 0.3;
+				cursor: default;
+			}
+
+			/* Thin sliding line under the tabs while the open tab is loading */
+			#load-bar {
+				position: absolute;
+				top: calc(var(--bar) + var(--tabs) - 2px);
+				left: 0;
+				right: 0;
+				height: 2px;
+				overflow: hidden;
+			}
+			#load-bar[hidden] {
+				display: none;
+			}
+			#load-bar::before {
+				content: "";
+				position: absolute;
+				inset: 0;
+				width: 35%;
+				background: linear-gradient(90deg, transparent, var(--text), transparent);
+				animation: load-slide 1.1s ease-in-out infinite;
+			}
+			@keyframes load-slide {
+				from {
+					transform: translateX(-100%);
+				}
+				to {
+					transform: translateX(290%);
+				}
 			}
 
 			/* ---------- Empty screen ---------- */
@@ -180,6 +402,7 @@
 			}
 			h1 {
 				margin: 0 0 14px;
+				min-height: 1.05em;
 				font: 400 clamp(34px, 7vw, 76px) / 1.05 var(--retro);
 				text-shadow: 0 0 16px var(--glow); /* the slight white glow */
 			}
@@ -196,11 +419,6 @@
 			@keyframes blink {
 				50% {
 					opacity: 0;
-				}
-			}
-			@media (prefers-reduced-motion: reduce) {
-				.cursor {
-					animation: none;
 				}
 			}
 			.hint {
@@ -239,19 +457,29 @@
 				color: var(--text);
 			}
 
-			/* ---------- The site you open ----------
-			   Scramjet adds its frame to the page; this places it inside the
-			   window, under the top bar, so the dotted background stays visible. */
+			/* ---------- The sites you open ----------
+			   Scramjet adds a frame to the page for each site; this places it
+			   inside the window, under the bar and tabs. Frames that belong to
+			   other tabs stay loaded but hidden. */
 			body > iframe {
 				position: fixed;
-				top: calc(var(--gap) + var(--bar) + 1px);
+				top: calc(var(--gap) + var(--bar) + var(--tabs) + 1px);
 				left: calc(var(--gap) + 1px);
 				width: calc(100vw - 2 * var(--gap) - 2px);
-				height: calc(100vh - 2 * var(--gap) - var(--bar) - 2px);
-				height: calc(100dvh - 2 * var(--gap) - var(--bar) - 2px);
+				height: calc(100vh - 2 * var(--gap) - var(--bar) - var(--tabs) - 2px);
+				height: calc(100dvh - 2 * var(--gap) - var(--bar) - var(--tabs) - 2px);
 				border: 0;
 				border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
 				background: #fff;
+				animation: frame-in 0.25s ease both;
+			}
+			body > iframe[hidden] {
+				display: none;
+			}
+			@keyframes frame-in {
+				from {
+					opacity: 0;
+				}
 			}
 
 			/* ---------- Small screens: address bar drops to its own row ---------- */
@@ -269,7 +497,7 @@
 					order: 3;
 					flex: 0 0 100%;
 				}
-				button {
+				.bar button {
 					padding: 0 9px;
 					font-size: 13px;
 				}
@@ -277,10 +505,22 @@
 					display: none; /* logo only, so the buttons fit on one row */
 				}
 			}
+
+			/* ---------- People who turn off motion get a still page ---------- */
+			@media (prefers-reduced-motion: reduce) {
+				*,
+				*::before,
+				*::after {
+					animation: none !important;
+					transition: none !important;
+				}
+			}
 		</style>
 	</head>
 
 	<body>
+		<canvas id="bg" aria-hidden="true"></canvas>
+
 		<div class="window">
 			<header class="bar">
 				<a class="brand" href="/" title="Back to the start">
@@ -324,8 +564,19 @@
 				</div>
 			</header>
 
+			<!-- Tabs are added here by the script at the bottom of this file -->
+			<div class="tabs" id="tabs" role="tablist" aria-label="Open tabs">
+				<button class="new-tab" id="new-tab-btn" type="button" aria-label="New tab" title="New tab">
+					+
+				</button>
+			</div>
+			<div id="load-bar" hidden></div>
+
 			<main class="stage">
-				<h1>Where to?<span class="cursor" aria-hidden="true"></span></h1>
+				<h1 aria-label="Where to?">
+					<span id="headline" aria-hidden="true">Where to?</span
+					><span class="cursor" aria-hidden="true"></span>
+				</h1>
 				<p class="hint">
 					Type a web address or a search in the bar above, then press Enter.
 				</p>
@@ -342,15 +593,160 @@
 		</div>
 
 		<script>
-			// Sable's own buttons. Scramjet's code (index.js) is untouched.
+			// Sable's own features: tabs, buttons, animations and the background.
+			// Scramjet's code (index.js) is untouched.
 			(() => {
 				const root = document.documentElement;
-				const address = document.getElementById("sj-address");
-				const clearBtn = document.getElementById("clear-btn");
-				const theaterBtn = document.getElementById("theater-btn");
-				const themeBtn = document.getElementById("theme-btn");
+				const $ = (id) => document.getElementById(id);
+				const form = $("sj-form");
+				const address = $("sj-address");
+				const tabStrip = $("tabs");
+				const newTabBtn = $("new-tab-btn");
+				const loadBar = $("load-bar");
+				const clearBtn = $("clear-btn");
+				const theaterBtn = $("theater-btn");
+				const themeBtn = $("theme-btn");
+				const headline = $("headline");
+				const stillPage = matchMedia("(prefers-reduced-motion: reduce)");
 
-				// Light / dark
+				/* ================= Animated background =================
+				   A grid of dots that slowly shimmers, lights up near the
+				   pointer, and ripples when you click or open something. */
+				const background = (() => {
+					const canvas = $("bg");
+					const ctx = canvas.getContext && canvas.getContext("2d");
+					if (!ctx) return { ripple() {}, recolor() {} };
+					document.body.classList.add("live-bg");
+
+					const SPACING = 26; // distance between dots
+					const REACH = 170; // how far the pointer's light reaches
+					const pointer = { x: -9999, y: -9999, power: 0, target: 0, timer: 0 };
+					let ripples = [];
+					let width = 0;
+					let height = 0;
+					let color = "255, 255, 255";
+					let strength = 1;
+					let frameCount = 0;
+
+					function recolor() {
+						color = getComputedStyle(root).getPropertyValue("--dot-rgb").trim() || color;
+						strength = root.dataset.theme === "light" ? 0.7 : 1;
+						if (stillPage.matches) draw(0);
+					}
+					function resize() {
+						const scale = Math.min(window.devicePixelRatio || 1, 2);
+						width = window.innerWidth;
+						height = window.innerHeight;
+						canvas.width = Math.round(width * scale);
+						canvas.height = Math.round(height * scale);
+						ctx.setTransform(scale, 0, 0, scale, 0, 0);
+						if (stillPage.matches) draw(0);
+					}
+					function draw(time) {
+						ctx.clearRect(0, 0, width, height);
+						ctx.fillStyle = `rgb(${color})`;
+						pointer.power += (pointer.target - pointer.power) * 0.08;
+						ripples = ripples.filter((r) => time - r.start < 1700);
+
+						for (let y = SPACING / 2; y < height; y += SPACING) {
+							for (let x = SPACING / 2; x < width; x += SPACING) {
+								// slow shimmer drifting across the whole field
+								const wave =
+									Math.sin(x * 0.012 + y * 0.008 + time * 0.0006) *
+									Math.sin(y * 0.014 - time * 0.0004);
+								let alpha = 0.27 + 0.2 * wave;
+								let size = 1.5;
+
+								// light around the pointer
+								const dx = x - pointer.x;
+								const dy = y - pointer.y;
+								const near = 1 - (dx * dx + dy * dy) / (REACH * REACH);
+								if (near > 0 && pointer.power > 0.01) {
+									alpha += 0.65 * near * pointer.power;
+									size += 2.2 * near * pointer.power;
+								}
+
+								// expanding rings
+								for (const r of ripples) {
+									const age = time - r.start;
+									const edge = Math.abs(Math.hypot(x - r.x, y - r.y) - age * 0.55);
+									if (edge < 46) {
+										const lift = (1 - edge / 46) * (1 - age / 1700);
+										alpha += 0.7 * lift;
+										size += 1.8 * lift;
+									}
+								}
+
+								ctx.globalAlpha = Math.min(1, alpha * strength);
+								if (size < 1.8) {
+									ctx.fillRect(x - size / 2, y - size / 2, size, size);
+								} else {
+									ctx.beginPath();
+									ctx.arc(x, y, size / 2, 0, 6.2832);
+									ctx.fill();
+								}
+							}
+						}
+					}
+					function loop(time) {
+						requestAnimationFrame(loop);
+						if (document.hidden || stillPage.matches) return;
+						frameCount++;
+						const browsing = root.classList.contains("browsing");
+						// A site covers most of the dots, so save the computer some work
+						if (browsing && root.classList.contains("theater")) return;
+						if (browsing && frameCount % 3) return;
+						draw(time);
+					}
+
+					window.addEventListener("resize", resize);
+					window.addEventListener("pointermove", (event) => {
+						pointer.x = event.clientX;
+						pointer.y = event.clientY;
+						pointer.target = 1;
+						clearTimeout(pointer.timer);
+						pointer.timer = setTimeout(() => (pointer.target = 0), 2500);
+					});
+					window.addEventListener("pointerdown", (event) => {
+						ripple(event.clientX, event.clientY);
+					});
+					stillPage.addEventListener("change", () => draw(0));
+
+					function ripple(x, y) {
+						if (stillPage.matches) return;
+						ripples.push({ x, y, start: performance.now() });
+						if (ripples.length > 4) ripples.shift();
+					}
+
+					resize();
+					recolor();
+					requestAnimationFrame(loop);
+					return { ripple, recolor };
+				})();
+
+				const rippleFrom = (element) => {
+					const box = element.getBoundingClientRect();
+					background.ripple(box.left + box.width / 2, box.top + box.height / 2);
+				};
+
+				/* ================= Headline that types itself ================= */
+				const HEADLINE = "Where to?";
+				let typing = 0;
+				function typeHeadline() {
+					clearInterval(typing);
+					if (stillPage.matches) {
+						headline.textContent = HEADLINE;
+						return;
+					}
+					let shown = 0;
+					headline.textContent = "";
+					typing = setInterval(() => {
+						headline.textContent = HEADLINE.slice(0, ++shown);
+						if (shown >= HEADLINE.length) clearInterval(typing);
+					}, 65);
+				}
+
+				/* ================= Light / dark ================= */
 				const showTheme = () => {
 					themeBtn.textContent = root.dataset.theme === "light" ? "Dark" : "Light";
 				};
@@ -362,32 +758,215 @@
 						localStorage.setItem("sable-theme", next);
 					} catch {}
 					showTheme();
+					background.recolor();
 				});
 
-				// Theater mode
+				/* ================= Theater mode ================= */
+				let gapTimer = 0;
 				theaterBtn.addEventListener("click", () => {
+					root.classList.add("gap-anim");
+					clearTimeout(gapTimer);
+					gapTimer = setTimeout(() => root.classList.remove("gap-anim"), 450);
 					const on = root.classList.toggle("theater");
 					theaterBtn.setAttribute("aria-pressed", String(on));
 				});
 
-				// The frames Scramjet has added to the page
-				const frames = () =>
-					[...document.body.children].filter((el) => el.tagName === "IFRAME");
+				/* ================= Tabs =================
+				   Each tab remembers its own site (a frame Scramjet adds to the
+				   page), its title, and what was typed in the address bar. */
+				const MAX_TABS = 12;
+				const tabs = [];
+				let active = null;
+				let waiting = null; // the tab that just asked for a site
+				let nextId = 1;
 
-				// Clear: take the current site off the screen
+				function newTab() {
+					if (tabs.length >= MAX_TABS) return null;
+
+					const el = document.createElement("div");
+					el.className = "tab";
+					const pick = document.createElement("button");
+					pick.type = "button";
+					pick.className = "tab-pick";
+					pick.setAttribute("role", "tab");
+					const dot = document.createElement("span");
+					dot.className = "tab-dot";
+					const label = document.createElement("span");
+					label.className = "tab-label";
+					pick.append(dot, label);
+					const close = document.createElement("button");
+					close.type = "button";
+					close.className = "tab-close";
+					close.textContent = "\u00d7";
+					close.setAttribute("aria-label", "Close tab");
+					el.append(pick, close);
+					tabStrip.insertBefore(el, newTabBtn);
+
+					const tab = {
+						id: nextId++,
+						el,
+						pick,
+						label,
+						frame: null, // the site shown in this tab
+						title: "",
+						url: "", // the real address of the page, when known
+						typed: "", // what is sitting in the address bar
+						loading: false,
+						timer: 0,
+					};
+					pick.addEventListener("click", () => selectTab(tab));
+					close.addEventListener("click", () => closeTab(tab));
+					el.addEventListener("auxclick", (event) => {
+						if (event.button === 1) closeTab(tab); // middle click closes
+					});
+
+					tabs.push(tab);
+					selectTab(tab);
+					typeHeadline();
+					newTabBtn.disabled = tabs.length >= MAX_TABS;
+					el.scrollIntoView({ block: "nearest", inline: "nearest" });
+					return tab;
+				}
+
+				function selectTab(tab) {
+					if (active && active !== tab) active.typed = address.value;
+					active = tab;
+					address.value = tab.url || tab.typed;
+					refresh();
+					if (!tab.frame) address.focus();
+				}
+
+				function closeTab(tab) {
+					const index = tabs.indexOf(tab);
+					if (index < 0) return;
+					tabs.splice(index, 1);
+					clearTimeout(tab.timer);
+					if (tab.frame) tab.frame.remove();
+					tab.el.classList.add("closing");
+					setTimeout(() => tab.el.remove(), stillPage.matches ? 0 : 170);
+
+					if (tabs.length === 0) newTab();
+					else if (active === tab) selectTab(tabs[Math.min(index, tabs.length - 1)]);
+					newTabBtn.disabled = tabs.length >= MAX_TABS;
+				}
+
+				// Make the page match the tabs: labels, which site is showing, buttons
+				function refresh() {
+					for (const tab of tabs) {
+						const isActive = tab === active;
+						tab.el.classList.toggle("active", isActive);
+						tab.el.classList.toggle("loading", tab.loading);
+						tab.pick.setAttribute("aria-selected", String(isActive));
+						const name = tab.title || "New tab";
+						tab.label.textContent = name;
+						tab.pick.title = name;
+						if (tab.frame) tab.frame.hidden = !isActive;
+					}
+					const hasSite = !!(active && active.frame);
+					clearBtn.hidden = !hasSite;
+					root.classList.toggle("browsing", hasSite);
+					loadBar.hidden = !(active && active.loading);
+				}
+
+				function setLoading(tab, on) {
+					tab.loading = on;
+					clearTimeout(tab.timer);
+					// never leave the loading signs stuck if a page stalls
+					if (on) tab.timer = setTimeout(() => setLoading(tab, false), 20000);
+					refresh();
+				}
+
+				// Read the page's title and real address out of a tab's site
+				function readPage(tab) {
+					if (!tab.frame) return;
+					try {
+						const win = tab.frame.contentWindow;
+						let real = "";
+						try {
+							// "scramjet" is created by index.js; it can turn the
+							// proxied address back into the real one
+							if (typeof scramjet !== "undefined" && typeof scramjet.decodeUrl === "function")
+								real = String(scramjet.decodeUrl(win.location.href) || "");
+						} catch {}
+						if (/^https?:\/\//i.test(real) && real !== tab.url) {
+							tab.url = real;
+							if (tab === active && document.activeElement !== address) address.value = real;
+						}
+						const title = (win.document.title || "").trim();
+						if (title) tab.title = title;
+						else if (tab.url) tab.title = new URL(tab.url).hostname;
+					} catch {}
+					const name = tab.title || "New tab";
+					if (tab.label.textContent !== name) refresh();
+				}
+
+				// Pressing Enter / Go: remember which tab asked
+				form.addEventListener(
+					"submit",
+					() => {
+						const text = address.value.trim();
+						if (!text || !active) return;
+						waiting = active;
+						active.typed = text;
+						active.title = text;
+						setLoading(active, true);
+						rippleFrom(address);
+						address.blur(); // so the bar can switch to the page's real address
+					},
+					true
+				);
+
+				// Scramjet adds a new frame to the page for each search.
+				// Hand it to the tab that asked, replacing that tab's old site.
+				function adopt(frame) {
+					const tab = waiting || active;
+					waiting = null;
+					if (!tab || !tabs.includes(tab)) {
+						frame.remove(); // its tab was closed while it was loading
+						return;
+					}
+					if (tab.frame && tab.frame !== frame) tab.frame.remove();
+					tab.frame = frame;
+					tab.url = "";
+					frame.addEventListener("load", () => {
+						setLoading(tab, false);
+						readPage(tab);
+						try {
+							// show the loading signs again when the page moves on
+							frame.contentWindow.addEventListener("beforeunload", () => setLoading(tab, true));
+						} catch {}
+					});
+					refresh();
+				}
+				new MutationObserver((records) => {
+					for (const record of records) {
+						for (const node of record.addedNodes) {
+							if (node.tagName === "IFRAME" && node.parentNode === document.body) adopt(node);
+						}
+					}
+				}).observe(document.body, { childList: true });
+
+				// Keep titles and addresses fresh as you click around inside sites
+				setInterval(() => tabs.forEach(readPage), 1200);
+
+				newTabBtn.addEventListener("click", () => {
+					if (newTab()) rippleFrom(newTabBtn);
+				});
+
+				// Clear: take the current site off the screen, keep the tab
 				clearBtn.addEventListener("click", () => {
-					frames().forEach((frame) => frame.remove());
+					if (!active) return;
+					if (active.frame) active.frame.remove();
+					active.frame = null;
+					active.title = active.url = active.typed = "";
 					address.value = "";
+					setLoading(active, false);
+					typeHeadline();
 					address.focus();
 				});
 
-				// Each search adds a new frame. Keep only the newest one, so old
-				// sites do not keep running (and playing sound) underneath.
-				new MutationObserver(() => {
-					const all = frames();
-					all.slice(0, -1).forEach((frame) => frame.remove());
-					clearBtn.hidden = all.length === 0;
-				}).observe(document.body, { childList: true });
+				// Start with one tab
+				newTab();
 			})();
 		</script>
 	</body>
